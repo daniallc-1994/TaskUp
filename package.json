@@ -1,0 +1,10 @@
+{
+  "name": "taskup-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "deploy:web": "cd web && npm run build && (where vercel >nul 2>nul && vercel --prod || echo \"vercel CLI not installed - skipped\")",
+    "deploy:backend": "python -m compileall backend/fastapi && cd ..\\TaskUPv1 && python -m compileall . && git add . && git commit -m \"chore: deploy backend\" || echo \"no backend changes to commit\" && git push || echo \"git push skipped\"",
+    "deploy:all": "npm run deploy:web && npm run deploy:backend"
+  }
+}
