@@ -75,12 +75,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (full_name: string, email: string, password: string, role = "client") => {
     setLoading(true);
     try {
-      const res = await api.post("/api/auth/register", { full_name, email, password, role, language: "en" });
+      const res = await api.post("/api/auth/register", {
+        full_name,
+        name: full_name,
+        email,
+        password,
+        role,
+        language: "en",
+      });
       persist(res.user ?? res, res.access_token || res.token || null);
       return { ok: true };
     } catch (err) {
       console.error(err);
-      return { ok: false, message: (err as any)?.message || "Signup failed" };
+      const rawMessage = (err as any)?.message || "Signup failed";
+      const normalized =
+        rawMessage.toLowerCase().includes("exist") || rawMessage.toLowerCase().includes("already")
+          ? "Email already in use"
+          : rawMessage;
+      return { ok: false, message: normalized };
     } finally {
       setLoading(false);
     }

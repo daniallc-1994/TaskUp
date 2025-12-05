@@ -34,6 +34,9 @@ create table if not exists public.user_profiles (
   currency text default 'NOK',
   stripe_connect_id text,
   is_blocked boolean default false,
+  kyc_status text default 'not_started',
+  risk_score numeric default 0,
+  flags jsonb default '{}'::jsonb,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -145,6 +148,14 @@ create table if not exists public.admin_logs (
   created_at timestamptz default now()
 );
 
+create table if not exists public.fraud_flags (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references public.user_profiles(id),
+  note text,
+  risk_score numeric,
+  created_at timestamptz default now()
+);
+
 -- Reports
 create table if not exists public.reports (
   id uuid primary key default gen_random_uuid(),
@@ -198,6 +209,7 @@ alter table public.reports enable row level security;
 alter table public.favorites enable row level security;
 alter table public.referrals enable row level security;
 alter table public.availability enable row level security;
+alter table public.fraud_flags enable row level security;
 
 -- Basic policies (simplified)
 -- Profiles: owner read/update, admins all

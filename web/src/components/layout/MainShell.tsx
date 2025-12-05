@@ -1,6 +1,9 @@
+'use client';
+
 import React from "react";
 import Link from "next/link";
 import { Button } from "../ui/button";
+import { useI18n } from "../../i18n/I18nProvider";
 
 type MainShellProps = {
   children: React.ReactNode;
@@ -14,6 +17,7 @@ const navLinks = [
 ];
 
 export const MainShell: React.FC<MainShellProps> = ({ children }) => {
+  const { t } = useI18n();
   return (
     <div className="min-h-screen text-white relative" style={{ background: "var(--bg)" }}>
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -35,7 +39,7 @@ export const MainShell: React.FC<MainShellProps> = ({ children }) => {
           <nav className="hidden md:flex items-center gap-6">
             {navLinks.map((link) => (
               <Link key={link.href} href={link.href} className="text-gray-300 hover:text-white font-semibold">
-                {link.label}
+                {t(link.label)}
               </Link>
             ))}
             <Button variant="outline" size="sm">

@@ -1,10 +1,14 @@
+'use client';
+
 import { Protected } from "../../components/Protected";
 import { DashboardShell } from "../../src/components/layout/DashboardShell";
 import { Card } from "../../src/components/ui/card";
 import { Input } from "../../src/components/ui/input";
 import { Button } from "../../src/components/ui/button";
+import { useAuth } from "../../lib/useAuth";
 
 export default function SettingsPage() {
+  const { logout } = useAuth();
   return (
     <Protected>
       <DashboardShell title="Settings" subtitle="Language, notifications, privacy, and profile.">
@@ -23,6 +27,9 @@ export default function SettingsPage() {
               Save preferences
             </Button>
           </Card>
+          <Button variant="outline" onClick={logout} className="w-fit">
+            Logout
+          </Button>
         </div>
       </DashboardShell>
     </Protected>

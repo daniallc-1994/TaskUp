@@ -10,6 +10,7 @@ import { Input } from "../../../src/components/ui/input";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/useAuth";
 import { Task, Offer, Message, Payment, Dispute } from "../../../lib/types";
+import { supabase } from "../../../lib/supabase";
 
 type Params = { params: { id: string } };
 
@@ -36,6 +37,24 @@ export default function OrderRoom({ params }: Params) {
   useEffect(() => {
     load();
   }, [token, id]);
+
+  useEffect(() => {
+    if (!supabase) return;
+    const msgSub = supabase
+      .channel(`messages-${id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages", filter: `task_id=eq.${id}` }, () => load())
+      .subscribe();
+    const offerSub = supabase
+      .channel(`offers-${id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "offers", filter: `task_id=eq.${id}` }, () => load())
+      .subscribe();
+    return () => {
+      if (supabase) {
+        supabase.removeChannel(msgSub);
+        supabase.removeChannel(offerSub);
+      }
+    };
+  }, [id, supabase]);
 
   const sendMessage = async () => {
     if (!token || !user || !body) return;

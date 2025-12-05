@@ -1,4 +1,4 @@
-from taskup_backend.app import create_app
+from .app_core.app import create_app
 
 app = create_app()
 

@@ -4,3 +4,4 @@ stripe==11.5.0
 supabase==2.4.0
 pyjwt==2.9.0
 passlib[bcrypt]==1.7.4
+pydantic-settings==2.5.2

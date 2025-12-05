@@ -13,11 +13,9 @@ Backend responsibilities:
 - Admin operations & logs
 - Backups & disaster recovery
 
-Subfolders:
+Subfolders (canonical):
 
 backend/
 ├── README.md
-├── supabase/
-│   └── README.md
-└── fastapi/
-    └── README.md
+├── supabase/    ← schema + migrations
+└── fastapi/     ← FastAPI service (entrypoint: `backend.fastapi_main:app`)

@@ -1,6 +1,9 @@
 import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import { useState } from "react";
-import { api } from "../../lib/api";
+import { api, setAuthToken } from "../../lib/api";
+import { colors } from "../../theme";
+import { Link } from "expo-router";
+import { saveToken } from "../../lib/storage";
 
 export default function AuthScreen() {
   const [email, setEmail] = useState("");
@@ -12,12 +15,17 @@ export default function AuthScreen() {
     setLoading(true);
     setMessage(null);
     try {
-      await api.post("/api/auth/login", { email, password });
+      const res = await api.post("/api/auth/login", { email, password });
+      const token = res?.access_token || res?.token;
+      if (token) {
+        setAuthToken(token);
+        await saveToken(token);
+      }
       setMessage("Logged in");
     } catch (e: any) {
-      setMessage(e?.message || "Login failed");
+        setMessage(e?.message || "Login failed");
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   };
 
@@ -27,7 +35,7 @@ export default function AuthScreen() {
       <TextInput
         style={styles.input}
         placeholder="Email"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={colors.muted}
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -36,7 +44,7 @@ export default function AuthScreen() {
       <TextInput
         style={styles.input}
         placeholder="Password"
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={colors.muted}
         secureTextEntry
         value={password}
         onChangeText={setPassword}
@@ -44,7 +52,12 @@ export default function AuthScreen() {
       <Pressable style={styles.button} onPress={login} disabled={loading}>
         <Text style={styles.buttonText}>{loading ? "..." : "Sign in"}</Text>
       </Pressable>
-      {message ? <Text style={{ color: "#a5f3fc", marginTop: 8 }}>{message}</Text> : null}
+      {message ? <Text style={{ color: colors.cyan, marginTop: 8 }}>{message}</Text> : null}
+      <Link href="/auth/signup" asChild>
+        <Pressable style={{ marginTop: 12 }}>
+          <Text style={{ color: colors.muted }}>Need an account? Sign up</Text>
+        </Pressable>
+      </Link>
     </View>
   );
 }
@@ -52,35 +65,35 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0B0C15",
+    backgroundColor: colors.bg,
     padding: 24,
     justifyContent: "center",
     gap: 12,
   },
   title: {
-    color: "white",
+    color: colors.text,
     fontSize: 24,
     fontWeight: "700",
     marginBottom: 8,
   },
   input: {
-    backgroundColor: "#111827",
-    borderRadius: 10,
+    backgroundColor: colors.glass,
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: "white",
+    color: colors.text,
     borderWidth: 1,
-    borderColor: "#1f2937",
+    borderColor: colors.border,
   },
   button: {
-    backgroundColor: "#8B5CFF",
+    backgroundColor: colors.purple,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: "center",
     marginTop: 8,
   },
   buttonText: {
-    color: "white",
+    color: colors.text,
     fontWeight: "600",
   },
 });

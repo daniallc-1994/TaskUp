@@ -44,6 +44,11 @@ This repository contains **three main projects** that work together:
 - app/.env → mobile env (public-ish keys)
 - backend/fastapi/.env → server-side secrets
 
+## Quickstart (local)
+- Backend API: `uvicorn backend.fastapi_main:app --reload` (from repo root; depends on env vars)
+- Web: `cd web && npm install && npm run dev` (NEXT_PUBLIC_API_BASE_URL must point to the API)
+- Mobile: `cd app && npm install && npx expo start`
+
 Real secrets (Stripe, Supabase, Railway, email, SMS, etc.) **must never be committed** to Git. They live only in local .env files and hosting dashboards.
 
 When working:

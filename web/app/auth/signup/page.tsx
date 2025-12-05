@@ -6,6 +6,7 @@ import { Button } from "../../../src/components/ui/button";
 import { Input } from "../../../src/components/ui/input";
 import { Card } from "../../../src/components/ui/card";
 import { useAuth } from "../../../lib/useAuth";
+import { useI18n } from "../../../src/i18n/I18nProvider";
 
 export default function Signup() {
   const { register, loading } = useAuth();
@@ -14,6 +15,7 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"client" | "tasker">("client");
   const [error, setError] = useState<string | null>(null);
+  const { t } = useI18n();
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -25,7 +27,7 @@ export default function Signup() {
   return (
     <div className="max-w-5xl mx-auto px-4 lg:px-8 py-16 grid lg:grid-cols-2 gap-10 items-center">
       <div className="space-y-4">
-        <h1 className="text-4xl font-black text-white">Create your TaskUp account</h1>
+        <h1 className="text-4xl font-black text-white">{t("auth.signupTitle")}</h1>
         <p className="text-gray-300 text-lg">Post tasks, get offers, and pay safely with escrow.</p>
         <ul className="text-gray-300 text-sm space-y-1">
           <li>- Verified taskers with ratings</li>

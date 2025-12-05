@@ -1,11 +1,16 @@
 const API_BASE = (process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/+$/, "");
+let defaultToken: string | undefined;
+
+export const setAuthToken = (token?: string) => {
+  defaultToken = token || undefined;
+};
 
 type HttpMethod = "GET" | "POST";
 
 async function request(method: HttpMethod, path: string, body?: any, token?: string) {
   const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token || defaultToken) headers.Authorization = `Bearer ${token || defaultToken}`;
 
   const res = await fetch(url, {
     method,
