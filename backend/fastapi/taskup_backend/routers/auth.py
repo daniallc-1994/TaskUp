@@ -13,7 +13,7 @@ from ..schemas import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
 )
-from ..models import User, UserRole, Wallet
+from ..models import User, UserRole, Wallet, DeviceFingerprint
 from ..security import hash_password, verify_password, create_token, get_current_user
 from ..database import get_db
 from ..rate_limit import check
@@ -25,6 +25,12 @@ from ..errors import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _log_device(db: Session, user_id: str, request: Request, fingerprint: str | None):
+    ip = request.client.host if request and request.client else "unknown"
+    df = DeviceFingerprint(id=str(uuid4()), user_id=user_id, ip_address=ip, fingerprint=fingerprint or ip)
+    db.add(df)
 
 
 def _user_response(user: User, token: str | None = None) -> TokenResponse:
@@ -72,6 +78,8 @@ async def register(request: Request, payload: RegisterRequest, db: Session = Dep
     db.add(wallet)
     db.commit()
     db.refresh(user)
+    _log_device(db, user.id, request, payload.device_fingerprint)
+    db.commit()
     token = create_token(user.id, user.email, user.role.value if hasattr(user.role, "value") else user.role)
     return _user_response(user, token)
 
@@ -85,6 +93,8 @@ async def login(request: Request, payload: LoginRequest, db: Session = Depends(g
     if not user or not verify_password(payload.password, user.hashed_password):
         raise auth_error("AUTH_INVALID_CREDENTIALS", "Invalid credentials", http_status=401)
     token = create_token(user.id, user.email, user.role.value if hasattr(user.role, "value") else user.role)
+    _log_device(db, user.id, request, payload.device_fingerprint)
+    db.commit()
     return _user_response(user, token)
 
 

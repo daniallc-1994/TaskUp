@@ -257,3 +257,15 @@ class AdminLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     admin = relationship("User")
+
+
+class DeviceFingerprint(Base):
+    __tablename__ = "device_fingerprints"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    ip_address = Column(String, nullable=False)
+    fingerprint = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")

@@ -6,7 +6,7 @@ from ..schemas import PaymentOut, PaymentCreate, WalletOut, TransactionOut
 from ..security import get_current_user, require_roles
 from ..database import get_db
 from ..models import Wallet, Transaction, TransactionType, TransactionStatus, Payment, PaymentStatus, Offer, User, Task
-from ..notifications import create_notification
+from ..notifications import create_notification, notify_admins
 from ..admin_logs import log_admin_action
 from ..payments_service import _get_wallet, release_escrow_to_tasker
 from ..payments_utils import create_tx
@@ -319,14 +319,19 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             payment.stripe_charge_id = data.get("latest_charge") or payment.stripe_charge_id
         elif event_type == "payment_intent.payment_failed":
             payment.status = PaymentStatus.failed
+            create_notification(db, payment.client_id, "payment_failed", "Payment failed", "", {"payment_id": payment.id})
         elif event_type == "charge.refunded":
             payment.status = PaymentStatus.refunded
             payment.stripe_refund_id = data.get("id")
         elif event_type == "charge.dispute.created":
             payment.status = PaymentStatus.disputed
             notify_admins(db, "payment_dispute", "Stripe dispute opened", "", {"payment_id": payment.id})
+            create_notification(db, payment.client_id, "dispute_opened", "Dispute opened", "", {"payment_id": payment.id})
+            create_notification(db, payment.tasker_id, "dispute_opened", "Dispute opened", "", {"payment_id": payment.id})
         elif event_type == "charge.dispute.closed":
             payment.status = PaymentStatus.escrowed
+            create_notification(db, payment.client_id, "dispute_closed", "Dispute closed", "", {"payment_id": payment.id})
+            create_notification(db, payment.tasker_id, "dispute_closed", "Dispute closed", "", {"payment_id": payment.id})
         elif event_type == "transfer.created":
             payment.status = PaymentStatus.payment_released
             payment.stripe_transfer_id = data.get("id")
