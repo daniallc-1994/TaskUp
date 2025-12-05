@@ -1,0 +1,16 @@
+{
+  "title.home": "TaskUp – Get any task done fast",
+  "desc.home": "Secure escrow, live offers, realtime chat for clients and taskers.",
+  "title.how": "How TaskUp works",
+  "desc.how": "Post tasks, get offers, pay safely with escrow.",
+  "title.pricing": "TaskUp pricing and fees",
+  "desc.pricing": "Transparent fees, Stripe escrow, payouts to taskers.",
+  "title.legal.terms": "Terms of Service – TaskUp",
+  "desc.legal.terms": "Contract between clients, taskers, and TaskUp.",
+  "title.legal.privacy": "Privacy Policy – TaskUp",
+  "desc.legal.privacy": "How TaskUp handles your data and privacy.",
+  "title.legal.cookies": "Cookie Policy – TaskUp",
+  "desc.legal.cookies": "Cookies and tracking preferences.",
+  "title.legal.disputes": "Dispute/Refund Policy – TaskUp",
+  "desc.legal.disputes": "How disputes and refunds are handled."
+}
