@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { Button } from "../ui/button";
 import { useI18n } from "../../i18n/I18nProvider";
+import { useNotifications } from "../../lib/useNotifications";
 
 type MainShellProps = {
   children: React.ReactNode;
@@ -17,7 +18,8 @@ const navLinks = [
 ];
 
 export const MainShell: React.FC<MainShellProps> = ({ children }) => {
-  const { t } = useI18n();
+  const { t, locale, setLocale } = useI18n();
+  const { unread } = useNotifications();
   return (
     <div className="min-h-screen text-white relative" style={{ background: "var(--bg)" }}>
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -42,11 +44,37 @@ export const MainShell: React.FC<MainShellProps> = ({ children }) => {
                 {t(link.label)}
               </Link>
             ))}
-            <Button variant="outline" size="sm">
-              <Link href="/auth/login">Sign In</Link>
+            <select
+              className="bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200"
+              value={locale}
+              onChange={(e) => setLocale(e.target.value as any)}
+            >
+              <option value="en">EN</option>
+              <option value="nb">NB</option>
+              <option value="sv">SV</option>
+              <option value="da">DA</option>
+              <option value="de">DE</option>
+              <option value="fr">FR</option>
+              <option value="es">ES</option>
+            </select>
+            <Link href="/notifications" className="relative text-gray-300 hover:text-white">
+              <span className="inline-flex items-center gap-1">
+                <span role="img" aria-label="notifications">
+                  🔔
+                </span>
+                <span className="text-sm">{t("nav.notifications")}</span>
+              </span>
+              {unread > 0 ? (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] rounded-full px-2 py-0.5">
+                  {unread}
+                </span>
+              ) : null}
+            </Link>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/auth/login">{t("nav.login")}</Link>
             </Button>
-            <Button size="sm">
-              <Link href="/auth/signup">Get Started</Link>
+            <Button size="sm" asChild>
+              <Link href="/auth/signup">{t("nav.signup")}</Link>
             </Button>
           </nav>
         </div>
