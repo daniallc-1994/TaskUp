@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 from fastapi import APIRouter, Request, Depends, status
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from ..schemas import (
     RegisterRequest,
@@ -13,7 +14,7 @@ from ..schemas import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
 )
-from ..models import User, UserRole, Wallet, DeviceFingerprint
+from ..models import User, UserRole, Wallet, DeviceFingerprint, Task, Offer, Message, Payment, Transaction, Dispute, Notification
 from ..security import hash_password, verify_password, create_token, get_current_user
 from ..database import get_db
 from ..rate_limit import check
@@ -23,6 +24,7 @@ from ..errors import (
     validation_error,
     not_found_error,
 )
+from ..logging_utils import log_event
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -31,6 +33,7 @@ def _log_device(db: Session, user_id: str, request: Request, fingerprint: str | 
     ip = request.client.host if request and request.client else "unknown"
     df = DeviceFingerprint(id=str(uuid4()), user_id=user_id, ip_address=ip, fingerprint=fingerprint or ip)
     db.add(df)
+    log_event(user_id=user_id, action="device_fingerprint", extra={"ip": ip, "fingerprint": fingerprint})
 
 
 def _user_response(user: User, token: str | None = None) -> TokenResponse:
@@ -130,6 +133,57 @@ async def change_password(payload: ChangePasswordRequest, db: Session = Depends(
     db.commit()
     return {"ok": True}
 
+
+@router.get("/account/export")
+async def export_account(user=Depends(get_current_user), db: Session = Depends(get_db)):
+    check(user.get("id"), "account_export", limit=20, window_seconds=3600)
+    user_id = user.get("id")
+    profile: User | None = db.query(User).filter(User.id == user_id).first()
+    if not profile:
+        raise not_found_error("USER_NOT_FOUND", "User not found")
+    data = {
+        "user": UserOut.from_orm(profile),
+        "tasks": [t for t in db.query(Task).filter(Task.client_id == user_id).all()],
+        "offers": [o for o in db.query(Offer).filter(Offer.tasker_id == user_id).all()],
+        "messages": [m for m in db.query(Message).filter(or_(Message.sender_id == user_id, Message.receiver_id == user_id)).all()],
+        "payments": [p for p in db.query(Payment).filter(or_(Payment.client_id == user_id, Payment.tasker_id == user_id)).all()],
+        "transactions": [tx for tx in db.query(Transaction).join(Wallet, Transaction.wallet_id == Wallet.id).filter(Wallet.user_id == user_id).all()],
+        "disputes": [d for d in db.query(Dispute).filter(or_(Dispute.raised_by_id == user_id, Dispute.against_user_id == user_id)).all()],
+        "notifications": [n for n in db.query(Notification).filter(Notification.user_id == user_id).all()],
+        "device_fingerprints": [df for df in db.query(DeviceFingerprint).filter(DeviceFingerprint.user_id == user_id).all()],
+    }
+    log_event(user_id=user_id, action="account_export", extra={"items": {k: len(v) if isinstance(v, list) else 1 for k, v in data.items()}})
+    return data
+
+
+@router.post("/account/delete")
+async def delete_account(user=Depends(get_current_user), db: Session = Depends(get_db)):
+    check(user.get("id"), "account_delete", limit=5, window_seconds=3600)
+    user_id = user.get("id")
+    db_user: User | None = db.query(User).filter(User.id == user_id).first()
+    if not db_user:
+        raise not_found_error("USER_NOT_FOUND", "User not found")
+
+    # Anonymise user
+    db_user.email = f"deleted-{user_id}@taskup.local"
+    db_user.full_name = "Deleted User"
+    db_user.hashed_password = hash_password(str(uuid4()))
+    db_user.language = "deleted"
+    db_user.flags = {"deleted": True}
+    db_user.reset_token = None
+    db_user.reset_token_expires_at = None
+    db_user.kyc_status = None
+    db_user.risk_score = 0.0
+
+    # Scrub messages content
+    db.query(Message).filter(or_(Message.sender_id == user_id, Message.receiver_id == user_id)).update({Message.content: "[deleted by user]"})
+    # Delete notifications and device fingerprints
+    db.query(Notification).filter(Notification.user_id == user_id).delete()
+    db.query(DeviceFingerprint).filter(DeviceFingerprint.user_id == user_id).delete()
+
+    db.commit()
+    log_event(user_id=user_id, action="account_deleted", extra={})
+    return {"ok": True}
 
 @router.post("/forgot-password")
 async def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):

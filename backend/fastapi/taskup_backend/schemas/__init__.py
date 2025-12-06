@@ -313,3 +313,14 @@ class NotificationReadResponse(BaseModel):
 
 class AcceptOffer(BaseModel):
     offer_id: str
+
+
+class DeviceFingerprintOut(BaseModel):
+    id: str
+    user_id: str
+    ip_address: str
+    fingerprint: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        orm_mode = True
