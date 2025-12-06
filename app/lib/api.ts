@@ -1,3 +1,5 @@
+import { trackError } from "./telemetry";
+
 const API_BASE = (process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/+$/, "");
 let defaultToken: string | undefined;
 
@@ -5,7 +7,7 @@ export const setAuthToken = (token?: string) => {
   defaultToken = token || undefined;
 };
 
-type HttpMethod = "GET" | "POST";
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 async function request(method: HttpMethod, path: string, body?: any, token?: string) {
   const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
@@ -18,10 +20,14 @@ async function request(method: HttpMethod, path: string, body?: any, token?: str
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  const json = await res.json().catch(() => null);
+  const isJson = (res.headers.get("content-type") || "").includes("application/json");
+  const json = isJson ? await res.json().catch(() => null) : null;
+
   if (!res.ok) {
-    const message = json?.detail || json?.message || "Request failed";
-    throw new Error(message);
+    const payload = json || { status: res.status };
+    const message = payload?.detail || payload?.message || JSON.stringify(payload);
+    trackError(payload, { source: "mobile", endpoint: path, method, status: res.status });
+    throw { apiError: payload, status: res.status, message };
   }
   return json;
 }
@@ -29,4 +35,8 @@ async function request(method: HttpMethod, path: string, body?: any, token?: str
 export const api = {
   get: (path: string, token?: string) => request("GET", path, undefined, token),
   post: (path: string, body?: any, token?: string) => request("POST", path, body, token),
+  put: (path: string, body?: any, token?: string) => request("PUT", path, body, token),
+  patch: (path: string, body?: any, token?: string) => request("PATCH", path, body, token),
+  del: (path: string, token?: string) => request("DELETE", path, undefined, token),
+  API_BASE,
 };

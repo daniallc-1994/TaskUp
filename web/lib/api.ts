@@ -1,3 +1,5 @@
+import { trackError } from "./telemetry";
+
 const isDev = process.env.NODE_ENV === "development";
 export const API_BASE = (
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ||
@@ -19,7 +21,10 @@ async function request(method: HttpMethod, path: string, body?: any, token?: str
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  console.log(`[api:web] ${method} ${url}`, body ?? "");
+  if (process.env.NODE_ENV !== "production") {
+    // eslint-disable-next-line no-console
+    console.log(`[api:web] ${method} ${url}`, body ?? "");
+  }
 
   const res = await fetch(url, {
     method,
@@ -40,14 +45,20 @@ async function request(method: HttpMethod, path: string, body?: any, token?: str
 
   if (!res.ok) {
     const payload = data || { status: res.status };
-    console.error(`[api:web] ${method} ${normalized} failed`, {
+    const context = {
       status: res.status,
-      headers: Object.fromEntries(res.headers.entries()),
+      endpoint: normalized,
+      method,
       body: payload,
-    });
+    };
+    trackError(payload, { source: "web", ...context });
+    if (process.env.NODE_ENV !== "production") {
+      // eslint-disable-next-line no-console
+      console.error(`[api:web] ${method} ${normalized} failed`, context);
+    }
     const message =
       typeof payload === "string" ? payload : payload?.detail || payload?.message || JSON.stringify(payload);
-    throw new Error(message || "Request failed");
+    throw { apiError: payload, status: res.status, message: message || "Request failed" };
   }
 
   return data;

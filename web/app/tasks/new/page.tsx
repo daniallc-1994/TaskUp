@@ -8,6 +8,7 @@ import { Button } from "../../../src/components/ui/button";
 import { Input } from "../../../src/components/ui/input";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/useAuth";
+import { trackEvent, trackError } from "../../../lib/telemetry";
 
 export default function NewTaskPage() {
   const { token } = useAuth();
@@ -27,13 +28,14 @@ export default function NewTaskPage() {
         budget_cents: budget ? parseInt(budget, 10) * 100 : undefined,
         currency: "NOK",
       };
-      await api.post("/api/tasks", payload, token);
+      const res = await api.post("/api/tasks", payload, token);
+      trackEvent("task.created", { source: "web", taskId: res?.id });
       setMessage("Task created!");
       setTitle("");
       setBudget("");
       setDesc("");
     } catch (err: any) {
-      console.error(err);
+      trackError(err, { source: "web", endpoint: "/api/tasks", method: "POST" });
       setMessage(err?.message || "Could not create task");
     } finally {
       setLoading(false);

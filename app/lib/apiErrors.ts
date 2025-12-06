@@ -1,53 +1,95 @@
-export type TaskUpApiError = {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-    type?: string;
-    http_status?: number;
-    field_errors?: Record<string, string[]>;
-    details?: Record<string, unknown>;
-    correlation_id?: string;
-    retryable?: boolean;
-    docs_url?: string;
-  };
+const FALLBACK_MESSAGE = "Something went wrong. Please try again.";
+
+export type ApiErrorDetail = {
+  code?: string;
+  message: string;
+  http_status?: number;
+  details?: any;
+  fields?: Record<string, string | string[]>;
 };
 
-export function parseApiError(err: unknown): TaskUpApiError | null {
-  if (!err) return null;
-  if (typeof err === "object") {
-    const e = err as any;
-    if (e.success === false && e.error) return e as TaskUpApiError;
-    if (e.apiError) return parseApiError(e.apiError);
-    if (e.error && typeof e.error.code === "string") {
-      return {
-        success: false,
-        error: {
-          code: e.error.code,
-          message: e.error.message ?? "Request failed",
-          type: e.error.type,
-          http_status: e.error.http_status,
-          field_errors: e.error.field_errors,
-          details: e.error.details,
-          correlation_id: e.error.correlation_id,
-          retryable: !!e.error.retryable,
-          docs_url: e.error.docs_url,
-        },
-      };
-    }
-  }
-  return null;
+export type ApiErrorResponse = {
+  success: false;
+  error: ApiErrorDetail;
+};
+
+const FRIENDLY: Record<string, string> = {
+  NETWORK_ERROR: "errors.network",
+  UNAUTHORIZED: "errors.unauthorized",
+  FORBIDDEN: "errors.forbidden",
+  NOT_FOUND: "errors.not_found",
+  VALIDATION_ERROR: "errors.validation",
+  RATE_LIMIT: "errors.rate_limited",
+  INTERNAL_ERROR: "errors.server",
+};
+
+function isNetworkIssue(input: any) {
+  const code = (input?.code || "").toString().toUpperCase();
+  const msg = (input?.message || "").toString().toLowerCase();
+  return (
+    code === "ECONNABORTED" ||
+    code === "ECONNRESET" ||
+    code === "ENETUNREACH" ||
+    msg.includes("network") ||
+    msg.includes("fetch") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("offline") ||
+    input?.name === "AbortError"
+  );
 }
 
-export function getUserFriendlyMessage(err: TaskUpApiError | null): string {
-  if (!err) return "Something went wrong";
-  const map: Record<string, string> = {
-    AUTH_INVALID_CREDENTIALS: "Invalid email or password",
-    AUTH_REQUIRED: "Please sign in to continue",
-    RATE_LIMIT_EXCEEDED: "Too many requests. Please wait and try again.",
-    TASK_NOT_FOUND: "Task not found",
-    OFFER_NOT_FOUND: "Offer not found",
-    PAYMENT_NO_PAYOUT_DESTINATION: "Stripe Connect onboarding required for payouts",
-  };
-  return map[err.error.code] || err.error.message || "Something went wrong";
+function normalize(raw: any, status?: number): ApiErrorDetail {
+  const http_status = raw?.http_status ?? raw?.status ?? status;
+  const code =
+    raw?.code ||
+    raw?.error_code ||
+    raw?.type ||
+    (http_status ? `HTTP_${http_status}` : undefined) ||
+    "INTERNAL_ERROR";
+  const message =
+    raw?.message ||
+    raw?.detail ||
+    raw?.description ||
+    raw?.error ||
+    (typeof raw === "string" ? raw : null) ||
+    FALLBACK_MESSAGE;
+  const fields =
+    (raw?.fields && typeof raw.fields === "object" ? raw.fields : undefined) ||
+    (raw?.errors && typeof raw.errors === "object" ? raw.errors : undefined) ||
+    (raw?.validation_errors && typeof raw.validation_errors === "object" ? raw.validation_errors : undefined);
+  return { code, message, http_status, details: typeof raw === "object" ? raw : undefined, fields };
+}
+
+export function parseApiError(input: any): ApiErrorResponse {
+  if (isNetworkIssue(input)) {
+    return { success: false, error: { code: "NETWORK_ERROR", message: FALLBACK_MESSAGE } };
+  }
+  const status = input?.status ?? input?.statusCode ?? input?.response?.status;
+  const data = input?.response?.data ?? input?.data ?? input?.body ?? (typeof input === "object" ? input : null);
+  if (data?.success === false && data.error) {
+    return { success: false, error: normalize(data.error, status) };
+  }
+  if (data?.error) return { success: false, error: normalize(data.error, status) };
+  if (data?.message || data?.detail || typeof data === "string") return { success: false, error: normalize(data, status) };
+  if (input?.message) return { success: false, error: normalize(input, status) };
+  return { success: false, error: { code: "INTERNAL_ERROR", message: FALLBACK_MESSAGE, http_status: status } };
+}
+
+export function getUserFriendlyMessage(parsed: ApiErrorResponse | null | undefined, t?: (key: string) => string) {
+  if (!parsed) return t?.("errors.unknown") || FALLBACK_MESSAGE;
+  const code = parsed.error.code?.toUpperCase?.();
+  const http = parsed.error.http_status;
+  const fieldKey = parsed.error.fields ? Object.keys(parsed.error.fields)[0] : null;
+  if (fieldKey) {
+    const v = parsed.error.fields?.[fieldKey];
+    if (typeof v === "string") return v;
+    if (Array.isArray(v) && v.length > 0 && typeof v[0] === "string") return v[0];
+  }
+  if (code && FRIENDLY[code]) return t?.(FRIENDLY[code]) || parsed.error.message || FALLBACK_MESSAGE;
+  if (http === 401) return t?.("errors.unauthorized") || FALLBACK_MESSAGE;
+  if (http === 403) return t?.("errors.forbidden") || FALLBACK_MESSAGE;
+  if (http === 404) return t?.("errors.not_found") || FALLBACK_MESSAGE;
+  if (http === 429) return t?.("errors.rate_limited") || FALLBACK_MESSAGE;
+  if (http && http >= 500) return t?.("errors.server") || FALLBACK_MESSAGE;
+  return parsed.error.message || t?.("errors.unknown") || FALLBACK_MESSAGE;
 }

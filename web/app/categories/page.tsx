@@ -1,5 +1,4 @@
-'use client';
-
+import type { Metadata } from "next";
 import { Card } from "../../src/components/ui/card";
 import { Badge } from "../../src/components/ui/badge";
 import Link from "next/link";
@@ -12,6 +11,11 @@ const categories = [
   { name: "Delivery", desc: "Groceries, parcels, urgent runs", tasks: "2.7K" },
   { name: "Creative", desc: "Design, photo, content", tasks: "0.9K" },
 ];
+
+export const metadata: Metadata = {
+  title: "TaskUp | Categories",
+  description: "Browse popular TaskUp categories to reach the right taskers faster.",
+};
 
 export default function CategoriesPage() {
   return (

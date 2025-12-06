@@ -6,15 +6,11 @@ import { CookieConsent } from "../src/components/CookieConsent";
 import Script from "next/script";
 
 export const metadata: Metadata = {
-  title: "TaskUp – Nordic marketplace",
+  title: "TaskUp | Nordic marketplace",
   description: "Secure escrow, live offers, and realtime chat for clients and taskers.",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className="min-h-screen">

@@ -5,21 +5,27 @@ import Link from "next/link";
 import { Button } from "../ui/button";
 import { useI18n } from "../../i18n/I18nProvider";
 import { useNotifications } from "../../lib/useNotifications";
+import { useFeatureFlags } from "../../lib/featureFlags";
 
 type MainShellProps = {
   children: React.ReactNode;
 };
 
 const navLinks = [
-  { href: "/how-it-works", label: "How it works" },
-  { href: "/features", label: "Features" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/contact", label: "Contact" },
+  { href: "/", label: "nav.home" },
+  { href: "/how-it-works", label: "nav.how" },
+  { href: "/features", label: "nav.features" },
+  { href: "/pricing", label: "nav.pricing" },
+  { href: "/categories", label: "nav.categories" },
+  { href: "/for-clients", label: "nav.forClients" },
+  { href: "/for-taskers", label: "nav.forTaskers" },
+  { href: "/contact", label: "nav.contact" },
 ];
 
 export const MainShell: React.FC<MainShellProps> = ({ children }) => {
   const { t, locale, setLocale } = useI18n();
   const { unread } = useNotifications();
+  const { flags, environment } = useFeatureFlags();
   return (
     <div className="min-h-screen text-white relative" style={{ background: "var(--bg)" }}>
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -35,7 +41,9 @@ export const MainShell: React.FC<MainShellProps> = ({ children }) => {
             </div>
             <div>
               <div className="text-xl font-black">TaskUp</div>
-              <div className="text-xs text-purple-300 font-semibold">Norway&apos;s #1 Task Platform</div>
+              <div className="text-xs text-purple-300 font-semibold">
+                Norway&apos;s #1 Task Platform {environment ? `(${environment})` : null}
+              </div>
             </div>
           </div>
           <nav className="hidden md:flex items-center gap-6">
@@ -76,6 +84,11 @@ export const MainShell: React.FC<MainShellProps> = ({ children }) => {
             <Button size="sm" asChild>
               <Link href="/auth/signup">{t("nav.signup")}</Link>
             </Button>
+            {flags?.enable_beta_ui ? (
+              <span className="text-[11px] px-2 py-1 rounded-lg bg-purple-500/20 text-purple-100 border border-purple-400/40">
+                Beta UI
+              </span>
+            ) : null}
           </nav>
         </div>
       </header>

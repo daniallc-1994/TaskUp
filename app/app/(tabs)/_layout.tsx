@@ -1,8 +1,10 @@
 import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../../theme";
+import { useAuth } from "../../contexts/AuthContext";
+import { t } from "../../lib/i18n";
 
 export default function TabsLayout() {
+  const { user } = useAuth();
   return (
     <Tabs
       screenOptions={{
@@ -12,26 +14,12 @@ export default function TabsLayout() {
         tabBarInactiveTintColor: colors.muted,
       }}
     >
-      <Tabs.Screen
-        name="home"
-        options={{ title: "Home", tabBarIcon: ({ color, size }) => <Ionicons name="home" color={color} size={size} /> }}
-      />
-      <Tabs.Screen
-        name="tasks"
-        options={{ title: "Tasks", tabBarIcon: ({ color, size }) => <Ionicons name="list" color={color} size={size} /> }}
-      />
-      <Tabs.Screen
-        name="offers"
-        options={{ title: "Offers", tabBarIcon: ({ color, size }) => <Ionicons name="paper-plane" color={color} size={size} /> }}
-      />
-      <Tabs.Screen
-        name="wallet"
-        options={{ title: "Wallet", tabBarIcon: ({ color, size }) => <Ionicons name="card" color={color} size={size} /> }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{ title: "Profile", tabBarIcon: ({ color, size }) => <Ionicons name="person" color={color} size={size} /> }}
-      />
+      <Tabs.Screen name="home" options={{ title: t("nav_home"), href: user ? undefined : null }} />
+      <Tabs.Screen name="tasks" options={{ title: t("nav_tasks"), href: user ? undefined : null }} />
+      <Tabs.Screen name="offers" options={{ title: t("nav_offers"), href: user ? undefined : null }} />
+      <Tabs.Screen name="messages" options={{ title: t("nav_messages"), href: user ? undefined : null }} />
+      <Tabs.Screen name="wallet" options={{ title: t("nav_wallet"), href: user ? undefined : null }} />
+      <Tabs.Screen name="profile" options={{ title: t("nav_profile"), href: user ? undefined : null }} />
     </Tabs>
   );
 }

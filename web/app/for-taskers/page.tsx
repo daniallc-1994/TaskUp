@@ -1,5 +1,5 @@
-'use client';
-
+import type { Metadata } from "next";
+import Script from "next/script";
 import { Card } from "../../src/components/ui/card";
 import { Button } from "../../src/components/ui/button";
 import Link from "next/link";
@@ -11,9 +11,22 @@ const perks = [
   { title: "Protect your time", desc: "Clear offers, chat history, and dispute protection." },
 ];
 
+export const metadata: Metadata = {
+  title: "TaskUp for taskers",
+  description: "Find nearby jobs, send offers, and get paid securely with TaskUp.",
+};
+
 export default function ForTaskersPage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: "TaskUp for taskers",
+    description: "Discover local tasks and earn with escrow payouts via Stripe Connect.",
+    provider: { "@type": "Organization", name: "TaskUp" },
+  };
   return (
     <div className="max-w-6xl mx-auto px-4 py-12 space-y-8">
+      <Script id="ld-for-taskers" type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <div className="grid md:grid-cols-2 gap-8 items-center">
         <Card className="p-6 bg-white/5 border-white/10 space-y-3">
           {perks.map((p) => (

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { api } from "./api";
+import { trackEvent, trackError } from "./telemetry";
 
 type User = { id?: string; email: string; full_name?: string; role?: string } | null;
 
@@ -63,9 +64,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await api.post("/api/auth/login", { email, password });
       persist(res.user ?? res, res.access_token || res.token || null);
+      trackEvent("auth.login_success", { source: "web" });
       return { ok: true };
     } catch (err) {
-      console.error(err);
+      trackEvent("auth.login_failed", { source: "web" });
+      trackError(err, { source: "web", endpoint: "/api/auth/login", method: "POST" });
       return { ok: false, message: (err as any)?.message || "Login failed" };
     } finally {
       setLoading(false);
@@ -84,9 +87,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         language: "en",
       });
       persist(res.user ?? res, res.access_token || res.token || null);
+      trackEvent("auth.signup_success", { source: "web", role });
       return { ok: true };
     } catch (err) {
-      console.error(err);
+      trackEvent("auth.signup_failed", { source: "web", role });
+      trackError(err, { source: "web", endpoint: "/api/auth/register", method: "POST" });
       const rawMessage = (err as any)?.message || "Signup failed";
       const normalized =
         rawMessage.toLowerCase().includes("exist") || rawMessage.toLowerCase().includes("already")

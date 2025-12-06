@@ -1,40 +1,40 @@
 import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
 import { useState } from "react";
-import { api, setAuthToken } from "../../lib/api";
 import { colors } from "../../theme";
-import { Link } from "expo-router";
-import { saveToken } from "../../lib/storage";
+import { Link, useRouter } from "expo-router";
+import { useAuth } from "../../contexts/AuthContext";
+import { parseApiError, getUserFriendlyMessage } from "../../lib/apiErrors";
+import { t } from "../../lib/i18n";
 
 export default function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
+  const router = useRouter();
 
-  const login = async () => {
+  const handleLogin = async () => {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await api.post("/api/auth/login", { email, password });
-      const token = res?.access_token || res?.token;
-      if (token) {
-        setAuthToken(token);
-        await saveToken(token);
-      }
-      setMessage("Logged in");
+      const res = await login(email, password);
+      if (res.ok) router.replace("/(tabs)/home");
+      else setMessage(res.error || t("errors_unknown"));
     } catch (e: any) {
-        setMessage(e?.message || "Login failed");
+      const parsed = parseApiError(e);
+      setMessage(getUserFriendlyMessage(parsed, t));
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Sign in</Text>
+      <Text style={styles.title}>{t("auth_login")}</Text>
       <TextInput
         style={styles.input}
-        placeholder="Email"
+        placeholder={t("auth_email")}
         placeholderTextColor={colors.muted}
         autoCapitalize="none"
         keyboardType="email-address"
@@ -43,19 +43,19 @@ export default function AuthScreen() {
       />
       <TextInput
         style={styles.input}
-        placeholder="Password"
+        placeholder={t("auth_password")}
         placeholderTextColor={colors.muted}
         secureTextEntry
         value={password}
         onChangeText={setPassword}
       />
-      <Pressable style={styles.button} onPress={login} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? "..." : "Sign in"}</Text>
+      <Pressable style={styles.button} onPress={handleLogin} disabled={loading}>
+        <Text style={styles.buttonText}>{loading ? "..." : t("auth_login")}</Text>
       </Pressable>
       {message ? <Text style={{ color: colors.cyan, marginTop: 8 }}>{message}</Text> : null}
       <Link href="/auth/signup" asChild>
         <Pressable style={{ marginTop: 12 }}>
-          <Text style={{ color: colors.muted }}>Need an account? Sign up</Text>
+          <Text style={{ color: colors.muted }}>{t("auth_signup")}</Text>
         </Pressable>
       </Link>
     </View>

@@ -2,15 +2,39 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { DEFAULT_LOCALE, Locale, SUPPORTED_LOCALES, detectLocale } from "./config";
-import en from "../../public/locales/en/common.json";
-import nb from "../../public/locales/nb/common.json";
-import sv from "../../public/locales/sv/common.json";
-import da from "../../public/locales/da/common.json";
-import de from "../../public/locales/de/common.json";
-import fr from "../../public/locales/fr/common.json";
-import es from "../../public/locales/es/common.json";
+import enCommon from "../../public/locales/en/common.json";
+import nbCommon from "../../public/locales/nb/common.json";
+import svCommon from "../../public/locales/sv/common.json";
+import daCommon from "../../public/locales/da/common.json";
+import deCommon from "../../public/locales/de/common.json";
+import frCommon from "../../public/locales/fr/common.json";
+import esCommon from "../../public/locales/es/common.json";
+import enDashboard from "../../public/locales/en/dashboard.json";
+import nbDashboard from "../../public/locales/nb/dashboard.json";
+import svDashboard from "../../public/locales/sv/dashboard.json";
+import daDashboard from "../../public/locales/da/dashboard.json";
+import deDashboard from "../../public/locales/de/dashboard.json";
+import frDashboard from "../../public/locales/fr/dashboard.json";
+import esDashboard from "../../public/locales/es/dashboard.json";
+import enSeo from "../../public/locales/en/seo.json";
+import nbSeo from "../../public/locales/nb/seo.json";
+import svSeo from "../../public/locales/sv/seo.json";
+import daSeo from "../../public/locales/da/seo.json";
+import deSeo from "../../public/locales/de/seo.json";
+import frSeo from "../../public/locales/fr/seo.json";
+import esSeo from "../../public/locales/es/seo.json";
 
-const translations: Record<Locale, Record<string, string>> = { en, nb, sv, da, de, fr, es };
+const merge = (...objs: Record<string, string>[]) => Object.assign({}, ...objs);
+
+const translations: Record<Locale, Record<string, string>> = {
+  en: merge(enCommon, enDashboard, enSeo),
+  nb: merge(nbCommon, nbDashboard, nbSeo),
+  sv: merge(svCommon, svDashboard, svSeo),
+  da: merge(daCommon, daDashboard, daSeo),
+  de: merge(deCommon, deDashboard, deSeo),
+  fr: merge(frCommon, frDashboard, frSeo),
+  es: merge(esCommon, esDashboard, esSeo),
+};
 const STORAGE_KEY = "taskup_locale";
 
 type I18nCtx = {

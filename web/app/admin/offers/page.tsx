@@ -7,18 +7,32 @@ import { Card } from "../../../src/components/ui/card";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/useAuth";
 import { Offer } from "../../../lib/types";
+import { adminPaginated } from "../../../lib/adminApi";
+import { parseApiError, getUserFriendlyMessage } from "../../../lib/apiErrors";
+import { trackEvent, trackError } from "../../../lib/telemetry";
+import { Button } from "../../../src/components/ui/button";
 
 export default function AdminOffers() {
   const { token } = useAuth();
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [page, setPage] = useState(1);
+  const limit = 10;
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
-    api
-      .get("/api/admin/offers", token)
-      .then((res) => setOffers(res || []))
-      .catch((err) => console.error("admin offers", err));
-  }, [token]);
+    setError(null);
+    adminPaginated<Offer[]>("/api/admin/offers", token, page, limit)
+      .then((res) => {
+        setOffers(res || []);
+        trackEvent("admin.offers.viewed", { source: "web", page });
+      })
+      .catch((err) => {
+        const parsed = parseApiError(err);
+        setError(getUserFriendlyMessage(parsed));
+        trackError(parsed, { source: "web", endpoint: "/api/admin/offers", page });
+      });
+  }, [token, page]);
 
   return (
     <Protected role="admin">
@@ -33,7 +47,17 @@ export default function AdminOffers() {
               <span className="text-cyan-300">{o.status}</span>
             </Card>
           ))}
+          {error ? <div className="text-red-400 text-sm">{error}</div> : null}
           {offers.length === 0 ? <div className="text-gray-400 text-sm">No offers loaded.</div> : null}
+          <div className="flex gap-2 items-center">
+            <Button variant="outline" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              Prev
+            </Button>
+            <div className="text-gray-300 text-sm">Page {page}</div>
+            <Button variant="outline" disabled={offers.length < limit} onClick={() => setPage((p) => p + 1)}>
+              Next
+            </Button>
+          </div>
         </div>
       </DashboardShell>
     </Protected>

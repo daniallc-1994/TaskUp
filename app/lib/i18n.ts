@@ -1,38 +1,92 @@
-import { useEffect, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { colors } from "../theme";
-
-export type Locale = "en" | "nb" | "sv" | "da" | "de" | "fr" | "es";
-const STORAGE_KEY = "taskup_locale";
-
-const translations: Record<Locale, Record<string, string>> = {
-  en: {
-    "auth.loginTitle": "Sign in",
-    "auth.signupTitle": "Create account",
-    "home.headline": "Get any task done fast",
-    "home.cta": "View tasks",
-    "tasks.title": "Your tasks",
-    "wallet.title": "Wallet"
-  },
-  nb: { "auth.loginTitle": "Logg inn", "auth.signupTitle": "Registrer", "home.headline": "Få oppgaver gjort raskt", "home.cta": "Se oppgaver", "tasks.title": "Dine oppgaver", "wallet.title": "Lommebok" },
-  sv: { "auth.loginTitle": "Logga in", "auth.signupTitle": "Registrera", "home.headline": "Få uppgifter gjorda snabbt", "home.cta": "Visa uppgifter", "tasks.title": "Dina uppgifter", "wallet.title": "Plånbok" },
-  da: { "auth.loginTitle": "Log ind", "auth.signupTitle": "Registrer", "home.headline": "Få opgaver udført hurtigt", "home.cta": "Se opgaver", "tasks.title": "Dine opgaver", "wallet.title": "Pung" },
-  de: { "auth.loginTitle": "Anmelden", "auth.signupTitle": "Registrieren", "home.headline": "Aufgaben schnell erledigen", "home.cta": "Aufgaben ansehen", "tasks.title": "Deine Aufgaben", "wallet.title": "Wallet" },
-  fr: { "auth.loginTitle": "Se connecter", "auth.signupTitle": "Créer un compte", "home.headline": "Terminez vos tâches rapidement", "home.cta": "Voir les tâches", "tasks.title": "Vos tâches", "wallet.title": "Portefeuille" },
-  es: { "auth.loginTitle": "Iniciar sesión", "auth.signupTitle": "Crear cuenta", "home.headline": "Haz cualquier tarea rápido", "home.cta": "Ver tareas", "tasks.title": "Tus tareas", "wallet.title": "Billetera" }
+const base = {
+  nav_home: "Home",
+  nav_tasks: "Tasks",
+  nav_offers: "Offers",
+  nav_messages: "Messages",
+  nav_wallet: "Wallet",
+  nav_profile: "Profile",
+  auth_login: "Sign in",
+  auth_signup: "Sign up",
+  auth_email: "Email",
+  auth_password: "Password",
+  auth_fullname: "Full name",
+  auth_role_client: "Client",
+  auth_role_tasker: "Tasker",
+  auth_forgot: "Forgot password?",
+  auth_submit: "Continue",
+  tasks_title: "Tasks",
+  tasks_empty: "No tasks yet.",
+  tasks_create: "Create task",
+  tasks_details: "Task details",
+  tasks_status: "Status",
+  tasks_budget: "Budget",
+  tasks_accept_offer: "Accept offer",
+  tasks_mark_done: "Mark as done",
+  tasks_confirm: "Confirm completion",
+  tasks_open_dispute: "Open dispute",
+  tasks_view_offers: "Offers",
+  tasks_view_messages: "Messages",
+  offers_send: "Send offer",
+  offers_available: "Available tasks",
+  offers_amount: "Amount",
+  offers_message: "Message",
+  wallet_title: "Wallet",
+  wallet_loading: "Loading...",
+  wallet_empty: "No payments yet",
+  wallet_transactions: "Transactions",
+  wallet_topup: "Top up",
+  wallet_payout: "Withdraw",
+  messages_title: "Messages",
+  messages_empty: "No messages yet",
+  messages_input_placeholder: "Type a message...",
+  disputes_title: "Disputes",
+  disputes_open: "Open dispute",
+  disputes_reason: "Reason",
+  disputes_description: "Description",
+  settings_title: "Settings",
+  settings_language: "Language",
+  settings_logout: "Logout",
+  settings_radius: "Radius (km)",
+  settings_save: "Save",
+  gdpr_export: "Export data",
+  gdpr_export_desc: "Download all your data as JSON.",
+  gdpr_delete: "Delete account",
+  gdpr_delete_desc: "This will remove access and anonymize your data. This action cannot be undone.",
+  gdpr_delete_confirm: "Type DELETE to confirm",
+  errors_network: "Network error. Check your connection.",
+  errors_server: "Server error. Please try again.",
+  errors_validation: "Validation failed.",
+  errors_unauthorized: "Please sign in to continue.",
+  errors_forbidden: "You do not have access.",
+  errors_not_found: "Not found.",
+  errors_rate_limited: "Too many requests. Please try later.",
+  errors_unknown: "Something went wrong.",
+  toasts_saved: "Saved",
+  toasts_offer_sent: "Offer sent",
+  toasts_task_created: "Task created",
+  toasts_dispute_opened: "Dispute opened",
+  toasts_export_ready: "Export ready",
+  toasts_account_deleted: "Account deleted",
+  toasts_wallet_action: "Wallet updated",
 };
 
-export function useI18nApp() {
-  const [locale, setLocale] = useState<Locale>("en");
-  useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((l) => {
-      if (l && (translations as any)[l]) setLocale(l as Locale);
-    });
-  }, []);
-  const t = (key: string) => translations[locale]?.[key] || translations.en[key] || key;
-  const changeLocale = async (l: Locale) => {
-    setLocale(l);
-    await AsyncStorage.setItem(STORAGE_KEY, l);
-  };
-  return { locale, t, changeLocale, colors };
+export const STRINGS = {
+  en: base,
+  nb: { ...base },
+  sv: { ...base },
+  da: { ...base },
+  de: { ...base },
+  fr: { ...base },
+  es: { ...base },
+};
+
+export type Locale = keyof typeof STRINGS;
+const STORAGE_KEY = "taskup_locale";
+
+export function t(key: string, locale: Locale = "en") {
+  return STRINGS[locale]?.[key as keyof typeof STRINGS["en"]] || STRINGS.en[key as keyof typeof STRINGS["en"]] || key;
+}
+
+export function detectLocale(): Locale {
+  return "en";
 }

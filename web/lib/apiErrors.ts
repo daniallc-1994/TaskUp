@@ -132,8 +132,8 @@ export function parseApiError(input: any): ApiErrorResponse {
   }
 }
 
-export function getUserFriendlyMessage(parsed?: ApiErrorResponse | null): string {
-  if (!parsed) return FALLBACK_MESSAGE;
+export function getUserFriendlyMessage(parsed?: ApiErrorResponse | null, t?: (key: string) => string): string {
+  if (!parsed) return t?.("errors.unknown") || FALLBACK_MESSAGE;
 
   const code = parsed.error.code?.toUpperCase?.();
   const status = parsed.error.http_status;
@@ -141,12 +141,13 @@ export function getUserFriendlyMessage(parsed?: ApiErrorResponse | null): string
   const fieldMessage = pickFieldMessage(parsed.error.fields);
   if (fieldMessage) return fieldMessage;
 
-  if (code && FRIENDLY_MESSAGES[code]) return FRIENDLY_MESSAGES[code];
+  if (code && FRIENDLY_MESSAGES[code]) return t?.(`errors.${code.toLowerCase()}`) || FRIENDLY_MESSAGES[code];
 
-  if (status === 401) return FRIENDLY_MESSAGES.UNAUTHORIZED;
-  if (status === 403) return FRIENDLY_MESSAGES.FORBIDDEN;
-  if (status === 404) return FRIENDLY_MESSAGES.NOT_FOUND;
-  if (status && status >= 500) return FRIENDLY_MESSAGES.INTERNAL_ERROR;
+  if (status === 401) return t?.("errors.unauthorized") || FRIENDLY_MESSAGES.UNAUTHORIZED;
+  if (status === 403) return t?.("errors.forbidden") || FRIENDLY_MESSAGES.FORBIDDEN;
+  if (status === 404) return t?.("errors.not_found") || FRIENDLY_MESSAGES.NOT_FOUND;
+  if (status && status === 429) return t?.("errors.rate_limited") || FRIENDLY_MESSAGES.INTERNAL_ERROR;
+  if (status && status >= 500) return t?.("errors.server") || FRIENDLY_MESSAGES.INTERNAL_ERROR;
 
-  return parsed.error.message || FALLBACK_MESSAGE;
+  return parsed.error.message || t?.("errors.unknown") || FALLBACK_MESSAGE;
 }

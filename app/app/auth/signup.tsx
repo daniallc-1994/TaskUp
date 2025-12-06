@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
-import { api, setAuthToken } from "../../lib/api";
 import { colors } from "../../theme";
-import { Link } from "expo-router";
-import { saveToken } from "../../lib/storage";
+import { Link, useRouter } from "expo-router";
+import { useAuth } from "../../contexts/AuthContext";
+import { parseApiError, getUserFriendlyMessage } from "../../lib/apiErrors";
+import { t } from "../../lib/i18n";
 
 export default function SignupScreen() {
   const [name, setName] = useState("");
@@ -12,20 +13,19 @@ export default function SignupScreen() {
   const [role, setRole] = useState<"client" | "tasker">("client");
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { signup } = useAuth();
+  const router = useRouter();
 
-  const signup = async () => {
+  const handleSignup = async () => {
     setMessage(null);
     setLoading(true);
     try {
-      const res = await api.post("/api/auth/register", { full_name: name, email, password, role, language: "en" });
-      const token = res?.access_token || res?.token;
-      if (token) {
-        setAuthToken(token);
-        await saveToken(token);
-      }
-      setMessage("Account created.");
+      const res = await signup({ full_name: name, email, password, role });
+      if (res.ok) router.replace("/(tabs)/home");
+      else setMessage(res.error || t("errors_unknown"));
     } catch (e: any) {
-      setMessage(e?.message || "Signup failed");
+      const parsed = parseApiError(e);
+      setMessage(getUserFriendlyMessage(parsed, t));
     } finally {
       setLoading(false);
     }
@@ -33,11 +33,11 @@ export default function SignupScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Create account</Text>
-      <TextInput style={styles.input} placeholder="Full name" placeholderTextColor={colors.muted} value={name} onChangeText={setName} />
+      <Text style={styles.title}>{t("auth_signup")}</Text>
+      <TextInput style={styles.input} placeholder={t("auth_fullname")} placeholderTextColor={colors.muted} value={name} onChangeText={setName} />
       <TextInput
         style={styles.input}
-        placeholder="Email"
+        placeholder={t("auth_email")}
         placeholderTextColor={colors.muted}
         autoCapitalize="none"
         keyboardType="email-address"
@@ -46,7 +46,7 @@ export default function SignupScreen() {
       />
       <TextInput
         style={styles.input}
-        placeholder="Password"
+        placeholder={t("auth_password")}
         placeholderTextColor={colors.muted}
         secureTextEntry
         value={password}
@@ -54,19 +54,19 @@ export default function SignupScreen() {
       />
       <View style={styles.roleRow}>
         <Pressable style={[styles.pill, role === "client" && styles.pillActive]} onPress={() => setRole("client")}>
-          <Text style={styles.pillText}>Client</Text>
+          <Text style={styles.pillText}>{t("auth_role_client")}</Text>
         </Pressable>
         <Pressable style={[styles.pill, role === "tasker" && styles.pillActive]} onPress={() => setRole("tasker")}>
-          <Text style={styles.pillText}>Tasker</Text>
+          <Text style={styles.pillText}>{t("auth_role_tasker")}</Text>
         </Pressable>
       </View>
-      <Pressable style={styles.button} onPress={signup} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? "..." : "Sign up"}</Text>
+      <Pressable style={styles.button} onPress={handleSignup} disabled={loading}>
+        <Text style={styles.buttonText}>{loading ? "..." : t("auth_signup")}</Text>
       </Pressable>
       {message ? <Text style={{ color: colors.cyan, marginTop: 8 }}>{message}</Text> : null}
       <Link href="/auth" asChild>
         <Pressable style={{ marginTop: 16 }}>
-          <Text style={{ color: colors.muted }}>Have an account? Sign in</Text>
+          <Text style={{ color: colors.muted }}>{t("auth_login")}</Text>
         </Pressable>
       </Link>
     </View>

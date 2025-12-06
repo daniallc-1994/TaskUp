@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { Metadata } from "next";
+import Script from "next/script";
 import { Button } from "../src/components/ui/button";
 import { Card } from "../src/components/ui/card";
 import { Badge } from "../src/components/ui/badge";
@@ -25,9 +27,55 @@ const steps = [
   { title: "Pay in escrow", desc: "Secure Stripe escrow until you confirm delivery." },
 ];
 
+export const metadata: Metadata = {
+  title: "TaskUp | Get any task done fast",
+  description: "Secure escrow, live offers, realtime chat for clients and taskers.",
+  openGraph: {
+    title: "TaskUp | Get any task done fast",
+    description: "Secure escrow, live offers, realtime chat for clients and taskers.",
+    url: "https://taskup.no",
+    siteName: "TaskUp",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "TaskUp",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TaskUp | Get any task done fast",
+    description: "Secure escrow, live offers, realtime chat for clients and taskers.",
+    images: ["/og-image.png"],
+  },
+};
+
 export default function LandingPage() {
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: "TaskUp",
+    url: "https://taskup.no",
+    description: "Marketplace for clients and taskers with escrow payments and realtime chat.",
+    areaServed: "NO",
+    serviceType: ["Cleaning", "Moving", "Handyman", "Tech support", "Delivery"],
+    provider: {
+      "@type": "Organization",
+      name: "TaskUp",
+      url: "https://taskup.no",
+    },
+  };
+
   return (
     <div className="relative">
+      <Script
+        id="ld-home"
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        strategy="afterInteractive"
+      />
       <section className="max-w-7xl mx-auto px-4 lg:px-8 pt-16 pb-20">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">

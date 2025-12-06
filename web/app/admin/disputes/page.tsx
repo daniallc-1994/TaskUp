@@ -8,26 +8,46 @@ import { Button } from "../../../src/components/ui/button";
 import { api } from "../../../lib/api";
 import { useAuth } from "../../../lib/useAuth";
 import { Dispute } from "../../../lib/types";
+import { adminPaginated } from "../../../lib/adminApi";
+import { parseApiError, getUserFriendlyMessage } from "../../../lib/apiErrors";
+import { trackEvent, trackError } from "../../../lib/telemetry";
 
 export default function AdminDisputes() {
   const { token } = useAuth();
   const [disputes, setDisputes] = useState<Dispute[]>([]);
+  const [page, setPage] = useState(1);
+  const limit = 10;
+  const [error, setError] = useState<string | null>(null);
 
   const load = () => {
     if (!token) return;
-    api
-      .get("/api/admin/disputes", token)
-      .then((res) => setDisputes(res || []))
-      .catch((err) => console.error("admin disputes", err));
+    setError(null);
+    adminPaginated<Dispute[]>("/api/admin/disputes", token, page, limit)
+      .then((res) => {
+        setDisputes(res || []);
+        trackEvent("admin.disputes.viewed", { source: "web", page });
+      })
+      .catch((err) => {
+        const parsed = parseApiError(err);
+        setError(getUserFriendlyMessage(parsed));
+        trackError(parsed, { source: "web", endpoint: "/api/admin/disputes", page });
+      });
   };
 
   useEffect(() => {
     load();
-  }, [token]);
+  }, [token, page]);
 
   const resolve = async (id: string, resolution: "release" | "refund") => {
-    await api.post(`/api/disputes/${id}/resolve`, { resolution }, token!).catch(console.error);
-    load();
+    try {
+      await api.post(`/api/disputes/${id}/resolve`, { resolution }, token!);
+      trackEvent("admin.disputes.resolved", { source: "web", disputeId: id, resolution });
+      load();
+    } catch (err) {
+      const parsed = parseApiError(err);
+      setError(getUserFriendlyMessage(parsed));
+      trackError(parsed, { source: "web", endpoint: "/api/disputes/resolve", disputeId: id });
+    }
   };
 
   return (
@@ -54,6 +74,16 @@ export default function AdminDisputes() {
             </Card>
           ))}
           {disputes.length === 0 ? <div className="text-gray-400 text-sm">No disputes loaded.</div> : null}
+          {error ? <div className="text-red-400 text-sm">{error}</div> : null}
+          <div className="flex gap-2 items-center">
+            <Button variant="outline" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+              Prev
+            </Button>
+            <div className="text-gray-300 text-sm">Page {page}</div>
+            <Button variant="outline" disabled={disputes.length < limit} onClick={() => setPage((p) => p + 1)}>
+              Next
+            </Button>
+          </div>
         </div>
       </DashboardShell>
     </Protected>

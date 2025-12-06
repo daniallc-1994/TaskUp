@@ -18,3 +18,5 @@ web/.next/
 web/.turbo/
 __pycache__/
 *.pyc
+# Next.js build output
+web/.next
