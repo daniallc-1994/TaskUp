@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy.orm import Session
+from ..database import get_db
 
-from ..security import get_current_user
+from ..security import get_current_user, require_roles
 from ..config import get_settings
 from ..feature_flags import get_feature_flags, set_feature_flag
 from ..errors import correlation_id_from_request

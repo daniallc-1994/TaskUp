@@ -14,7 +14,7 @@ from ..schemas import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
 )
-from ..models import User, UserRole, Wallet, DeviceFingerprint, Task, Offer, Message, Payment, Transaction, Dispute, Notification
+from ..models import User, UserRole, Wallet, DeviceFingerprint, Task, Offer, Message, Payment, Transaction, Dispute, Notification, BlockedUser
 from ..security import hash_password, verify_password, create_token, get_current_user
 from ..database import get_db
 from ..rate_limit import check
@@ -25,15 +25,10 @@ from ..errors import (
     not_found_error,
 )
 from ..logging_utils import log_event
+from ..request_context import get_request_context
+from ..abuse import ensure_not_blocked, log_device_fingerprint, record_failed_login
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-def _log_device(db: Session, user_id: str, request: Request, fingerprint: str | None):
-    ip = request.client.host if request and request.client else "unknown"
-    df = DeviceFingerprint(id=str(uuid4()), user_id=user_id, ip_address=ip, fingerprint=fingerprint or ip)
-    db.add(df)
-    log_event(user_id=user_id, action="device_fingerprint", extra={"ip": ip, "fingerprint": fingerprint})
 
 
 def _user_response(user: User, token: str | None = None) -> TokenResponse:
@@ -58,8 +53,9 @@ def _user_response(user: User, token: str | None = None) -> TokenResponse:
 
 @router.post("/register", response_model=TokenResponse)
 async def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)):
-    ip = request.client.host
-    check(ip, "register")
+    ctx = get_request_context(request, None)
+    check(ctx.ip or "unknown", "register")
+    ensure_not_blocked(ctx, db)
     email = payload.email.lower()
     existing = db.query(User).filter(User.email == email).first()
     if existing:
@@ -81,22 +77,30 @@ async def register(request: Request, payload: RegisterRequest, db: Session = Dep
     db.add(wallet)
     db.commit()
     db.refresh(user)
-    _log_device(db, user.id, request, payload.device_fingerprint)
-    db.commit()
+    ctx.user_id = user.id
+    log_device_fingerprint(ctx, db)
     token = create_token(user.id, user.email, user.role.value if hasattr(user.role, "value") else user.role)
     return _user_response(user, token)
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(request: Request, payload: LoginRequest, db: Session = Depends(get_db)):
-    ip = request.client.host
-    check(ip, "login")
+    ctx = get_request_context(request, None)
+    check(ctx.ip or "unknown", "login")
+    # initial check by IP/device
+    ensure_not_blocked(ctx, db)
     email = payload.email.lower()
     user: User | None = db.query(User).filter(User.email == email).first()
+    # re-check blocklist with user context once known
+    if user:
+        ctx.user_id = user.id
+        ensure_not_blocked(ctx, db)
     if not user or not verify_password(payload.password, user.hashed_password):
+        record_failed_login(ctx, email, db)
         raise auth_error("AUTH_INVALID_CREDENTIALS", "Invalid credentials", http_status=401)
     token = create_token(user.id, user.email, user.role.value if hasattr(user.role, "value") else user.role)
-    _log_device(db, user.id, request, payload.device_fingerprint)
+    ctx.user_id = user.id
+    log_device_fingerprint(ctx, db)
     db.commit()
     return _user_response(user, token)
 

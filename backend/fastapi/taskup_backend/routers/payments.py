@@ -5,7 +5,19 @@ from datetime import datetime
 from ..schemas import PaymentOut, PaymentCreate, WalletOut, TransactionOut
 from ..security import get_current_user, require_roles
 from ..database import get_db
-from ..models import Wallet, Transaction, TransactionType, TransactionStatus, Payment, PaymentStatus, Offer, User, Task
+from ..models import (
+    Wallet,
+    Transaction,
+    TransactionType,
+    TransactionStatus,
+    Payment,
+    PaymentStatus,
+    Offer,
+    User,
+    Task,
+    Dispute,
+    DisputeStatus,
+)
 from ..notifications import create_notification, notify_admins
 from ..admin_logs import log_admin_action
 from ..payments_service import _get_wallet, release_escrow_to_tasker
@@ -15,6 +27,7 @@ from ..metrics import record_metric
 from sqlalchemy.orm import Session
 import stripe
 import os
+import json
 from ..errors import not_found_error, conflict_error, internal_error
 
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -273,81 +286,129 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     sig_header = request.headers.get("stripe-signature")
     webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
     event = None
-    if stripe.api_key and webhook_secret:
+
+    if stripe.api_key and webhook_secret and sig_header:
         try:
             event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)  # type: ignore
         except Exception as e:
             print(f"[payments] webhook error: {e}")
             return {"received": False}
     else:
-        return {"received": True}
+        # test mode / fallback: trust JSON payload as already parsed event
+        try:
+          event = json.loads(payload)
+        except Exception:
+          return {"received": False}
 
-    data = event["data"]["object"]
+    data = event.get("data", {}).get("object", {})
     event_type = event.get("type")
-    intent_id = data.get("id") or data.get("payment_intent")
+    intent_id = data.get("payment_intent") or data.get("id")
     metadata = data.get("metadata", {}) if isinstance(data, dict) else {}
     payment: Payment | None = None
     if intent_id:
         payment = db.query(Payment).filter(Payment.stripe_payment_intent_id == intent_id).first()
-        # Create payment record if missing but metadata present
-        if not payment and metadata.get("task_id") and metadata.get("offer_id") and metadata.get("initiator"):
-            offer = db.query(Offer).filter(Offer.id == metadata.get("offer_id")).first()
-            tasker_id = offer.tasker_id if offer else None
-            wallet = _get_wallet(db, metadata.get("initiator"))
-            payment = Payment(
+    if not payment and data.get("charge"):
+        payment = db.query(Payment).filter(Payment.stripe_charge_id == data.get("charge")).first()
+    if not payment and event_type and event_type.startswith("transfer"):
+        transfer_id = data.get("id")
+        if transfer_id:
+            payment = db.query(Payment).filter(Payment.stripe_transfer_id == transfer_id).first()
+    # Create payment record if missing but metadata present
+    if not payment and metadata.get("task_id") and metadata.get("offer_id") and metadata.get("initiator"):
+        offer = db.query(Offer).filter(Offer.id == metadata.get("offer_id")).first()
+        tasker_id = offer.tasker_id if offer else None
+        wallet = _get_wallet(db, metadata.get("initiator"))
+        payment = Payment(
+            id=str(uuid4()),
+            task_id=metadata.get("task_id"),
+            offer_id=metadata.get("offer_id"),
+            client_id=metadata.get("initiator"),
+            tasker_id=tasker_id or "",
+            wallet_id=wallet.id,
+            amount=data.get("amount_received") or data.get("amount") or 0,
+            currency=data.get("currency", "nok").upper(),
+            status=PaymentStatus.escrowed,
+            stripe_payment_intent_id=intent_id,
+            stripe_charge_id=data.get("latest_charge") or data.get("charge"),
+            created_at=datetime.utcnow(),
+        )
+        db.add(payment)
+        db.commit()
+        db.refresh(payment)
+        create_notification(db, payment.client_id, "payment_created", "Payment captured", "", {"payment_id": payment.id})
+
+    def ensure_dispute(payment: Payment):
+        dispute = (
+            db.query(Dispute)
+            .filter(Dispute.task_id == payment.task_id, Dispute.status == DisputeStatus.open)
+            .first()
+        )
+        if not dispute:
+            dispute = Dispute(
                 id=str(uuid4()),
-                task_id=metadata.get("task_id"),
-                offer_id=metadata.get("offer_id"),
-                client_id=metadata.get("initiator"),
-                tasker_id=tasker_id or "",
-                wallet_id=wallet.id,
-                amount=data.get("amount_received") or data.get("amount") or 0,
-                currency=data.get("currency", "nok").upper(),
-                status=PaymentStatus.escrowed,
-                stripe_payment_intent_id=intent_id,
-                stripe_charge_id=data.get("latest_charge"),
-                created_at=datetime.utcnow(),
+                task_id=payment.task_id,
+                raised_by_id=payment.client_id,
+                against_user_id=payment.tasker_id,
+                reason="stripe_dispute",
+                status=DisputeStatus.open,
             )
-            db.add(payment)
+            db.add(dispute)
             db.commit()
-            db.refresh(payment)
-            create_notification(db, payment.client_id, "payment_created", "Payment captured", "", {"payment_id": payment.id})
+            db.refresh(dispute)
+        return dispute
 
     if payment:
         if event_type == "payment_intent.succeeded":
             payment.status = PaymentStatus.escrowed
             payment.stripe_charge_id = data.get("latest_charge") or payment.stripe_charge_id
-        elif event_type == "payment_intent.payment_failed":
+        elif event_type == "payment_intent.payment_failed" or event_type == "charge.failed":
             payment.status = PaymentStatus.failed
             create_notification(db, payment.client_id, "payment_failed", "Payment failed", "", {"payment_id": payment.id})
+            notify_admins(db, "payment_failed", "Stripe payment failed", "", {"payment_id": payment.id})
         elif event_type == "charge.refunded":
             payment.status = PaymentStatus.refunded
             payment.stripe_refund_id = data.get("id")
+            create_notification(db, payment.client_id, "payment_refunded", "Payment refunded", "", {"payment_id": payment.id})
         elif event_type == "charge.dispute.created":
             payment.status = PaymentStatus.disputed
-            notify_admins(db, "payment_dispute", "Stripe dispute opened", "", {"payment_id": payment.id})
-            create_notification(db, payment.client_id, "dispute_opened", "Dispute opened", "", {"payment_id": payment.id})
-            create_notification(db, payment.tasker_id, "dispute_opened", "Dispute opened", "", {"payment_id": payment.id})
+            dispute = ensure_dispute(payment)
+            notify_admins(db, "payment_dispute", "Stripe dispute opened", "", {"payment_id": payment.id, "dispute_id": dispute.id})
+            create_notification(db, payment.client_id, "dispute_opened", "Dispute opened", "", {"payment_id": payment.id, "dispute_id": dispute.id})
+            create_notification(db, payment.tasker_id, "dispute_opened", "Dispute opened", "", {"payment_id": payment.id, "dispute_id": dispute.id})
         elif event_type == "charge.dispute.closed":
-            payment.status = PaymentStatus.escrowed
-            create_notification(db, payment.client_id, "dispute_closed", "Dispute closed", "", {"payment_id": payment.id})
-            create_notification(db, payment.tasker_id, "dispute_closed", "Dispute closed", "", {"payment_id": payment.id})
+            dispute = ensure_dispute(payment)
+            outcome = data.get("status") or data.get("outcome") or ""
+            if outcome == "won":
+                dispute.status = DisputeStatus.resolved_tasker
+                payment.status = PaymentStatus.payment_released
+            else:
+                dispute.status = DisputeStatus.resolved_client
+                payment.status = PaymentStatus.refunded
+            notify_admins(db, "payment_dispute_closed", "Dispute closed", "", {"payment_id": payment.id, "dispute_id": dispute.id, "outcome": outcome})
+            create_notification(db, payment.client_id, "dispute_closed", "Dispute closed", "", {"payment_id": payment.id, "outcome": outcome})
+            create_notification(db, payment.tasker_id, "dispute_closed", "Dispute closed", "", {"payment_id": payment.id, "outcome": outcome})
         elif event_type == "transfer.created":
             payment.status = PaymentStatus.payment_released
             payment.stripe_transfer_id = data.get("id")
         elif event_type == "transfer.failed":
+            payment.status = PaymentStatus.failed
+            payment.stripe_transfer_id = data.get("id") or payment.stripe_transfer_id
             notify_admins(db, "payment_transfer_failed", "Stripe transfer failed", "", {"payment_id": payment.id})
-        elif event_type == "payout.created":
-            # Update related transaction if exists
-            tx = db.query(Transaction).filter(Transaction.stripe_payout_id == data.get("id")).first()
-            if tx:
-                tx.status = TransactionStatus.succeeded
-        elif event_type in ("payout.failed", "payout.canceled"):
-            tx = db.query(Transaction).filter(Transaction.stripe_payout_id == data.get("id")).first()
-            if tx:
-                tx.status = TransactionStatus.failed
-            notify_admins(db, "payout_failed", "Payout failed", "", {"payout_id": data.get("id")})
+            create_notification(db, payment.tasker_id, "payment_failed", "Transfer failed", "", {"payment_id": payment.id})
         payment.updated_at = datetime.utcnow()
         db.commit()
+
+    if event_type == "payout.paid":
+        tx = db.query(Transaction).filter(Transaction.stripe_payout_id == data.get("id")).first()
+        if tx:
+            tx.status = TransactionStatus.succeeded
+            db.commit()
+    elif event_type in ("payout.failed", "payout.canceled", "payout.payment_failed"):
+        tx = db.query(Transaction).filter(Transaction.stripe_payout_id == data.get("id")).first()
+        if tx:
+            tx.status = TransactionStatus.failed
+            db.commit()
+        notify_admins(db, "payout_failed", "Payout failed", "", {"payout_id": data.get("id")})
+
     log_event(user_id=None, action="stripe_webhook", extra={"type": event_type, "intent": intent_id})
     return {"received": True}

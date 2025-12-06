@@ -48,7 +48,8 @@ async def get_current_user(
     user_id = payload.get("sub") or payload.get("user_id")
     profile: Optional[User] = db.query(User).filter(User.id == user_id).first()
     if not profile:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        # Treat unknown users as forbidden for access-controlled endpoints
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not found")
     # Normalize keys for downstream code
     return {
         "id": profile.id,

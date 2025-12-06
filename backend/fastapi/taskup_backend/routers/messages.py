@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from uuid import uuid4
 from typing import List
 from datetime import datetime
@@ -13,8 +13,22 @@ from ..notifications import create_notification
 from ..errors import not_found_error, permission_error
 from ..logging_utils import log_event
 from ..admin_logs import log_admin_action
+from ..request_context import get_request_context
+from ..abuse import ensure_not_blocked, log_device_fingerprint, record_action
 
 router = APIRouter(prefix="/messages", tags=["messages"])
+
+
+def _serialize_message(msg: Message) -> MessageOut:
+    return MessageOut(
+        id=msg.id,
+        task_id=msg.task_id,
+        sender_id=msg.sender_id,
+        recipient_id=msg.receiver_id,
+        body=msg.content,
+        created_at=msg.created_at,
+        is_read=msg.is_read,
+    )
 
 
 @router.get("", response_model=List[MessageOut])
@@ -32,12 +46,15 @@ async def list_messages(task_id: str, user=Depends(get_current_user), db: Sessio
         .all()
     )
     log_event(user_id=user.get("id"), action="messages_list", extra={"task_id": task_id, "count": len(messages)})
-    return [MessageOut.from_orm(m) for m in messages]
+    return [_serialize_message(m) for m in messages]
 
 
 @router.post("", response_model=MessageOut)
-async def create_message(payload: MessageCreate, user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_message(request: Request, payload: MessageCreate, user=Depends(get_current_user), db: Session = Depends(get_db)):
+    ctx = get_request_context(request, user)
+    ensure_not_blocked(ctx, db)
     check(user.get("id"), "message", limit=300, window_seconds=300)
+    record_action(ctx, "message_send", db, limit=250, window_seconds=300)
     task = db.query(Task).filter(Task.id == payload.task_id).first()
     if not task:
         raise not_found_error("TASK_NOT_FOUND", "Task not found")
@@ -58,9 +75,10 @@ async def create_message(payload: MessageCreate, user=Depends(get_current_user),
     db.add(msg)
     db.commit()
     db.refresh(msg)
+    log_device_fingerprint(ctx, db)
     # Notification
     create_notification(db, payload.recipient_id, "new_message", "New message", f"New message on task {payload.task_id}", {"task_id": payload.task_id})
     log_event(user_id=user.get("id"), action="message_sent", extra={"task_id": payload.task_id, "message_id": msg.id})
     if user.get("role") == "admin":
         log_admin_action(db, user.get("id"), "message_sent", "message", msg.id, {"task_id": payload.task_id})
-    return MessageOut.from_orm(msg)
+    return _serialize_message(msg)

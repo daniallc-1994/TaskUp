@@ -46,6 +46,14 @@ def send_email_notification(to_email: str, subject: str, content: str, data: dic
         return False
 
 
+def send_in_app_notification(user_id: str, type_: str, data: Optional[Any] = None) -> bool:
+    """
+    Backwards-compatible helper for legacy in-app notification calls.
+    Delegates to push notifications with a minimal payload.
+    """
+    return send_push_notification(user_id, type_, type_, data or {})
+
+
 def create_notification(db: Session, user_id: str, type_: str, title: str, body: str, data: Optional[Any] = None):
     note = Notification(
         id=str(uuid4()),

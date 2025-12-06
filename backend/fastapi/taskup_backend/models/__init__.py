@@ -12,6 +12,8 @@ from sqlalchemy import (
     Text,
     JSON,
     Enum,
+    Date,
+    LargeBinary,
 )
 from sqlalchemy.orm import declarative_base, relationship
 import enum
@@ -44,7 +46,9 @@ class User(Base):
     reset_token = Column(String)
     reset_token_expires_at = Column(DateTime)
 
-    tasks = relationship("Task", back_populates="client")
+    # Disambiguate: tasks table references users both as client and assigned tasker
+    tasks = relationship("Task", back_populates="client", foreign_keys="Task.client_id")
+    assigned_tasks = relationship("Task", back_populates="assigned_tasker", foreign_keys="Task.assigned_tasker_id")
     wallet = relationship("Wallet", uselist=False, back_populates="user")
 
 
@@ -52,6 +56,7 @@ class TaskStatus(str, enum.Enum):
     open = "open"
     assigned = "assigned"
     in_progress = "in_progress"
+    awaiting_client_confirmation = "awaiting_client_confirmation"
     completed = "completed"
     cancelled = "cancelled"
     disputed = "disputed"
@@ -78,8 +83,15 @@ class Task(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     due_date = Column(DateTime)
 
-    client = relationship("User", back_populates="tasks")
-    offers = relationship("Offer", back_populates="task", cascade="all, delete-orphan")
+    client = relationship("User", back_populates="tasks", foreign_keys=[client_id])
+    assigned_tasker = relationship("User", back_populates="assigned_tasks", foreign_keys=[assigned_tasker_id])
+    offers = relationship(
+        "Offer",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        foreign_keys="Offer.task_id",
+        primaryjoin="Task.id==Offer.task_id",
+    )
     messages = relationship("Message", back_populates="task", cascade="all, delete-orphan")
     disputes = relationship("Dispute", back_populates="task", cascade="all, delete-orphan")
 
@@ -104,7 +116,7 @@ class Offer(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    task = relationship("Task", back_populates="offers")
+    task = relationship("Task", back_populates="offers", foreign_keys=[task_id])
     tasker = relationship("User")
 
 
@@ -266,6 +278,33 @@ class DeviceFingerprint(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     ip_address = Column(String, nullable=False)
     fingerprint = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_seen_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User")
+
+
+class BlockedUser(Base):
+    __tablename__ = "blocked_users"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True)
+    ip_address = Column(String, nullable=True)
+    device_id = Column(String, nullable=True)
+    reason = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
+
+    user = relationship("User")
+
+
+class FraudFlag(Base):
+    __tablename__ = "fraud_flags"
+
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True)
+    note = Column(Text)
+    risk_score = Column(Float, default=0.0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User")

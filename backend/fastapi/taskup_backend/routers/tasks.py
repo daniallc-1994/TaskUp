@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from uuid import uuid4
 from typing import List, Optional
 from datetime import datetime
@@ -14,6 +14,8 @@ from ..notifications import create_notification
 from ..errors import TaskUpError, not_found_error, permission_error, conflict_error, auth_error
 from ..logging_utils import log_event
 from ..admin_logs import log_admin_action
+from ..request_context import get_request_context
+from ..abuse import ensure_not_blocked, log_device_fingerprint, record_action
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -84,8 +86,11 @@ async def get_task(task_id: str, user=Depends(get_current_user), db: Session = D
 
 
 @router.post("", response_model=TaskOut)
-async def create_task(payload: TaskCreate, user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def create_task(request: Request, payload: TaskCreate, user=Depends(get_current_user), db: Session = Depends(get_db)):
+    ctx = get_request_context(request, user)
+    ensure_not_blocked(ctx, db)
     check(user.get("id"), "task_create", limit=60, window_seconds=300)
+    record_action(ctx, "task_create", db, limit=50, window_seconds=300)
     task = Task(
         id=str(uuid4()),
         client_id=user["id"],
@@ -106,6 +111,7 @@ async def create_task(payload: TaskCreate, user=Depends(get_current_user), db: S
     db.commit()
     db.refresh(task)
     create_notification(db, task.client_id, "task_created", "Task created", task.title, {"task_id": task.id})
+    log_device_fingerprint(ctx, db)
     log_event(user_id=user.get("id"), action="task_created", extra={"task_id": task.id})
     return _serialize_task(task)
 

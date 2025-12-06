@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from uuid import uuid4
 from typing import List
 from datetime import datetime
@@ -13,6 +13,8 @@ from ..notifications import create_notification
 from ..errors import permission_error, not_found_error, conflict_error
 from ..logging_utils import log_event
 from ..admin_logs import log_admin_action
+from ..request_context import get_request_context
+from ..abuse import ensure_not_blocked, log_device_fingerprint, record_action
 
 router = APIRouter(prefix="/offers", tags=["offers"])
 
@@ -46,8 +48,11 @@ async def list_offers(task_id: str | None = None, user=Depends(get_current_user)
 
 
 @router.post("", response_model=OfferOut)
-async def create_offer(payload: OfferCreate, user=Depends(require_roles("tasker", "admin")), db: Session = Depends(get_db)):
+async def create_offer(request: Request, payload: OfferCreate, user=Depends(require_roles("tasker", "admin")), db: Session = Depends(get_db)):
+    ctx = get_request_context(request, user)
+    ensure_not_blocked(ctx, db)
     check(user.get("id"), "offer_create", limit=120, window_seconds=600)
+    record_action(ctx, "offer_create", db, limit=100, window_seconds=600)
     task = db.query(Task).filter(Task.id == payload.task_id).first()
     if not task:
         raise not_found_error("TASK_NOT_FOUND", "Task not found")
@@ -66,6 +71,7 @@ async def create_offer(payload: OfferCreate, user=Depends(require_roles("tasker"
     db.add(offer)
     db.commit()
     db.refresh(offer)
+    log_device_fingerprint(ctx, db)
     send_in_app_notification(user["id"], "offer_created", {"task_id": payload.task_id, "offer_id": offer.id})
     create_notification(db, payload.task_id and task.client_id or user["id"], "offer_created", "New offer", f"New offer on task {payload.task_id}", {"offer_id": offer.id, "task_id": payload.task_id})
     log_event(user_id=user.get("id"), action="offer_created", extra={"offer_id": offer.id, "task_id": payload.task_id})

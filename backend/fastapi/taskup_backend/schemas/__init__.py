@@ -45,6 +45,7 @@ class UserOut(UserBase):
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 class LoginRequest(BaseModel):
@@ -229,8 +230,9 @@ class PaymentOut(BaseModel):
 # Message
 class MessageBase(BaseModel):
     task_id: str
-    receiver_id: str
-    content: str
+    sender_id: str
+    recipient_id: str
+    body: str
 
 
 class MessageCreate(MessageBase):
@@ -239,12 +241,12 @@ class MessageCreate(MessageBase):
 
 class MessageOut(MessageBase):
     id: str
-    sender_id: str
     created_at: datetime
     is_read: bool = False
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 # Dispute

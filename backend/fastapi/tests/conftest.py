@@ -2,6 +2,7 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
 
 from taskup_backend.app import create_app
@@ -12,7 +13,12 @@ from taskup_backend.database import get_db
 
 @pytest.fixture(scope="session")
 def engine():
-    return create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    # Use a shared in-memory SQLite DB across the same engine
+    return create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
 
 
 @pytest.fixture(scope="session")
